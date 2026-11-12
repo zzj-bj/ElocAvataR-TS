@@ -1,0 +1,28 @@
+{
+  "name": "elocavatar-ts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "setup-assets": "node scripts/setup-assets.ts",
+    "test": "node --test tests/*.test.ts",
+    "test:browser": "playwright test"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "0.10.32",
+    "@pixiv/three-vrm": "3.5.5",
+    "three": "0.187.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.0",
+    "@types/node": "^24.0.0",
+    "@types/three": "^0.183.0",
+    "typescript": "5.9.3",
+    "vite": "7.3.1"
+  }
+}

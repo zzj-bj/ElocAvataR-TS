@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.vite/
+*.local
+*.log
+.env
+.env.*
+!.env.example
+public/models/*.task
+public/wasm/
+public/avatar/*.vrm
+artifacts/
