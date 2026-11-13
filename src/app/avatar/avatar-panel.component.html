@@ -1,0 +1,17 @@
+<section class="panel avatar-panel" aria-labelledby="avatar-title">
+  <div class="panel-title"><div><span class="index">02</span><h2 id="avatar-title">Virtual avatar</h2></div><span class="tag vrm-tag">VRM 0.x / 1.0</span></div>
+  <div class="avatar-view" id="avatar-view" #avatarView [class.mirrored]="mirror()"></div>
+  <div class="avatar-toolbar">
+    <div class="segmented" aria-label="Avatar view">
+      <button data-focus="body" [class.selected]="focus() === 'body'" (click)="setFocus('body')">Full body</button>
+      <button data-focus="left" [class.selected]="focus() === 'left'" (click)="setFocus('left')">Left hand</button>
+      <button data-focus="right" [class.selected]="focus() === 'right'" (click)="setFocus('right')">Right hand</button>
+    </div>
+    <button id="reset" class="quiet" (click)="reset()">↺ Reset view</button>
+  </div>
+  <div class="model-row">
+    <div><span class="model-icon">◇</span><div><strong id="model-name">{{ modelName() }}</strong><small id="model-detail">VRM humanoid · Body, fingers, and face</small></div></div>
+    <label class="button" for="model-file">Import VRM <span>↑</span></label>
+    <input id="model-file" type="file" accept=".vrm" hidden (change)="importModel($event)" />
+  </div>
+</section>

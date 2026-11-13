@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "lib": ["ES2022", "WebWorker"], "types": [], "outDir": "./out-tsc/worker", "noEmit": false, "rewriteRelativeImportExtensions": true },
+  "include": ["src/tracking/holistic.worker.ts"]
+}

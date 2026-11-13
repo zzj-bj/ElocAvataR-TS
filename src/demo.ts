@@ -29,7 +29,7 @@ export function demoMotion(time: number): MotionFrame {
         points[start + j] = { x, y, z };
       }
     }
-    hands[side] = { image: points, world: points };
+    hands[side] = { image: points, local: points };
   }
-  return { timestamp: performance.now(), pose: [], world, hands };
+  return { timestamp: performance.now(), aspect: 1, pose: [], world, face: [], hands };
 }

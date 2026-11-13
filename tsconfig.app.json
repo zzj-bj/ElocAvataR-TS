@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "types": [], "outDir": "./out-tsc/app", "noEmit": false, "rewriteRelativeImportExtensions": true },
+  "files": ["src/main.ts"],
+  "include": ["src/**/*.d.ts"],
+  "angularCompilerOptions": { "strictTemplates": true, "strictInjectionParameters": true }
+}

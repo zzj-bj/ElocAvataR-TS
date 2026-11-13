@@ -1,0 +1,44 @@
+{
+  "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
+  "version": 1,
+  "cli": { "analytics": false },
+  "projects": {
+    "elocavatar": {
+      "projectType": "application",
+      "root": "",
+      "sourceRoot": "src",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "browser": "src/main.ts",
+            "index": "index.html",
+            "tsConfig": "tsconfig.app.json",
+            "webWorkerTsConfig": "tsconfig.worker.json",
+            "outputPath": "dist/angular",
+            "deleteOutputPath": false,
+            "assets": [
+              { "glob": "**/*", "input": "public/avatar", "output": "avatar" },
+              { "glob": "**/*", "input": "public/holistic", "output": "holistic" }
+            ],
+            "styles": ["src/style.css"]
+          },
+          "configurations": {
+            "production": { "outputHashing": "all", "sourceMap": false },
+            "development": { "optimization": false, "sourceMap": true, "extractLicenses": false }
+          },
+          "defaultConfiguration": "production"
+        },
+        "serve": {
+          "builder": "@angular/build:dev-server",
+          "options": { "host": "127.0.0.1", "port": 5173 },
+          "configurations": {
+            "development": { "buildTarget": "elocavatar:build:development" },
+            "production": { "buildTarget": "elocavatar:build:production" }
+          },
+          "defaultConfiguration": "development"
+        }
+      }
+    }
+  }
+}

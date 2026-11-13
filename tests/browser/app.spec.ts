@@ -2,13 +2,38 @@ import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
 test('loads a real VRM, renders motion, imports models, and runs local inference with a synthetic camera', async ({ page }) => {
+  await page.addInitScript(() => {
+    const stats = { submitted: 0, completed: 0, inFlight: 0, maxInFlight: 0, terminated: 0 };
+    (window as unknown as { workerStats: typeof stats }).workerStats = stats;
+    const NativeWorker = window.Worker;
+    window.Worker = class extends NativeWorker {
+      constructor(url: string | URL, options?: WorkerOptions) {
+        super(url, options);
+        this.addEventListener('message', event => {
+          if (event.data.type === 'result') { stats.completed++; stats.inFlight--; }
+        });
+      }
+      override postMessage(message: unknown, transfer?: Transferable[] | StructuredSerializeOptions): void {
+        if (message && typeof message === 'object' && 'type' in message && message.type === 'frame') {
+          stats.submitted++; stats.inFlight++;
+          stats.maxInFlight = Math.max(stats.maxInFlight, stats.inFlight);
+        }
+        if (Array.isArray(transfer)) super.postMessage(message, transfer);
+        else super.postMessage(message, transfer);
+      }
+      override terminate(): void { stats.terminated++; super.terminate(); }
+    };
+  });
   const errors: string[] = [];
   const external: string[] = [];
+  const assets: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('request', request => {
-    if (/^https?:/.test(request.url()) && !request.url().startsWith('http://127.0.0.1:5173')) external.push(request.url());
+    assets.push(request.url());
+    if (/^https?:/.test(request.url()) && !request.url().startsWith('http://127.0.0.1:5174')) external.push(request.url());
   });
   await page.goto('/');
+  await expect(page.locator('app-root')).toHaveAttribute('ng-version', /^22\./);
   await expect(page.locator('#notice')).toContainText('Ready.', { timeout: 30_000 });
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   expect(await page.locator('body').innerText()).not.toMatch(/\p{Script=Han}/u);
@@ -38,12 +63,23 @@ test('loads a real VRM, renders motion, imports models, and runs local inference
   await expect(page.locator('#model-name')).toHaveText('sample.vrm');
 
   // Offline-after-navigation: model, WASM and inference must need only localhost.
-  await page.route(/^https?:\/\/(?!127\.0\.0\.1:5173)/, route => route.abort());
+  await page.route(/^https?:\/\/(?!127\.0\.0\.1:5174)/, route => route.abort());
   await page.locator('#start').click();
   await expect(page.locator('#notice')).toContainText('Live tracking is on', { timeout: 90_000 });
   await expect(page.locator('#fps')).not.toHaveText('— FPS', { timeout: 30_000 });
+  expect(assets.some(url => url.includes('/holistic/holistic.js'))).toBe(true);
+  expect(assets.some(url => url.includes('/holistic/') && url.endsWith('.task'))).toBe(false);
+  await expect(page.locator('#face-state')).toBeVisible();
+  const stats = await page.evaluate(() => (window as unknown as { workerStats: { completed: number; maxInFlight: number } }).workerStats);
+  expect(stats.completed).toBeGreaterThanOrEqual(2);
+  expect(stats.maxInFlight).toBe(1);
+  // Controls remain usable while the next inference runs in the worker.
+  await page.locator('#mirror').uncheck();
+  await expect(page.locator('#avatar-view')).not.toHaveClass(/mirrored/);
+  await page.locator('#mirror').check();
   await page.screenshot({ path: 'artifacts/synthetic-camera.png', fullPage: true });
   await page.locator('#stop').click();
+  expect(await page.evaluate(() => (window as unknown as { workerStats: { terminated: number } }).workerStats.terminated)).toBeGreaterThan(0);
   expect(await page.locator('#video').evaluate(v => (v as HTMLVideoElement).srcObject)).toBeNull();
   await expect(page.locator('#body-state')).toHaveText('—');
   await expect(page.locator('#start')).toBeEnabled();

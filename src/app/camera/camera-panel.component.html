@@ -1,0 +1,31 @@
+<section class="panel camera-panel" aria-labelledby="camera-title">
+  <div class="panel-title"><div><span class="index">01</span><h2 id="camera-title">Motion capture</h2></div><span class="tag">HOLISTIC INPUT</span></div>
+  <div class="camera-view" id="camera-view" #cameraView>
+    <div class="camera-media" id="camera-media" #cameraMedia [class.mirrored]="mirror()">
+      <video id="video" #video autoplay muted playsinline (loadedmetadata)="fitVideo()"></video>
+      <canvas id="overlay" #overlay [hidden]="!landmarks()"></canvas>
+    </div>
+    <div class="placeholder" id="placeholder" [hidden]="capture.running() || capture.starting()">
+      <div class="camera-icon">◎</div><h3>It starts with a move</h3>
+      <p>Turn on your camera and keep your body, hands, and face in view.<br>Or try the motion demo to explore your avatar first.</p>
+    </div>
+    <div class="view-label"><i></i><span id="camera-label">{{ capture.running() || capture.starting() ? 'Local video stream' : 'Camera off' }}</span></div>
+  </div>
+  <div class="tracking-row">
+    <span><i id="body-dot" [class.active]="capture.bodyTracked()"></i> Body <b id="body-state">{{ capture.bodyTracked() ? 'Tracked' : '—' }}</b></span>
+    <span><i id="left-dot" [class.active]="capture.leftTracked()"></i> Left hand <b id="left-state">{{ capture.leftTracked() ? 'Tracked' : '—' }}</b></span>
+    <span><i id="right-dot" [class.active]="capture.rightTracked()"></i> Right hand <b id="right-state">{{ capture.rightTracked() ? 'Tracked' : '—' }}</b></span>
+    <span><i id="face-dot" [class.active]="capture.faceTracked()"></i> Face <b id="face-state">{{ capture.faceTracked() ? 'Tracked' : '—' }}</b></span>
+    <span class="fps" id="fps">{{ capture.fps() ? capture.fps().toFixed(1) + ' FPS' : '— FPS' }}</span>
+  </div>
+  <div class="camera-actions">
+    <button class="primary" id="start" [disabled]="capture.running() || capture.starting()" (click)="start()">{{ capture.starting() ? 'Preparing…' : capture.running() ? 'Capturing' : 'Start camera' }} <span>↗</span></button>
+    <button id="stop" [disabled]="!capture.running() && !capture.starting()" (click)="capture.stop()">Stop</button>
+  </div>
+  <label class="select-label">Camera
+    <select id="device" [disabled]="capture.running() || capture.starting()" [value]="selectedDevice()" (change)="selectedDevice.set($any($event.target).value)">
+      <option value="">System default camera</option>
+      @for (device of capture.devices(); track device.id) { <option [value]="device.id">{{ device.label }}</option> }
+    </select>
+  </label>
+</section>

@@ -7,6 +7,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils, type VRM } from '@pixiv/three-vrm';
 import { AvatarRig } from './rig.ts';
 import { emptyMotion, type MotionFrame } from './motion.ts';
+import { solveFace } from './face.ts';
 
 export class AvatarStage {
   readonly renderer = new WebGLRenderer({ antialias: true, alpha: false });
@@ -21,6 +22,7 @@ export class AvatarStage {
   private generation = 0;
   private focus: 'body' | 'left' | 'right' = 'body';
   private disposed = false;
+  private resizeRaf = 0;
 
   constructor(host: HTMLElement) {
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -41,11 +43,14 @@ export class AvatarStage {
     this.controls.maxPolarAngle = Math.PI * 0.95;
     this.resetView();
     this.observer = new ResizeObserver(() => {
-      const width = host.clientWidth, height = host.clientHeight;
-      if (!width || !height) return;
-      this.renderer.setSize(width, height);
-      this.camera.aspect = width / height;
-      this.camera.updateProjectionMatrix();
+      cancelAnimationFrame(this.resizeRaf);
+      this.resizeRaf = requestAnimationFrame(() => {
+        const width = host.clientWidth, height = host.clientHeight;
+        if (!width || !height || this.disposed) return;
+        this.renderer.setSize(width, height);
+        this.camera.aspect = width / height;
+        this.camera.updateProjectionMatrix();
+      });
     });
     this.observer.observe(host);
   }
@@ -112,6 +117,13 @@ export class AvatarStage {
 
   render(motion: MotionFrame, dt: number, smoothing: number, threshold: number): void {
     this.rig?.apply(motion, dt, smoothing, threshold);
+    const expressions = solveFace(motion.face, motion.aspect);
+    const manager = this.vrm?.expressionManager;
+    const alpha = smoothing <= 0 ? 1 : 1 - Math.exp(-dt / smoothing);
+    for (const name of ['blinkLeft', 'blinkRight', 'aa'] as const) {
+      const current = manager?.getValue(name) ?? 0;
+      manager?.setValue(name, current + (expressions[name] - current) * alpha);
+    }
     this.vrm?.update(dt);
     if (this.focus !== 'body') {
       const hand = this.vrm?.humanoid.getRawBoneNode(`${this.focus}Hand`);
@@ -135,6 +147,7 @@ export class AvatarStage {
     this.disposed = true;
     this.generation++;
     this.observer.disconnect();
+    cancelAnimationFrame(this.resizeRaf);
     this.controls.dispose();
     VRMUtils.deepDispose(this.scene);
     this.renderer.dispose();
