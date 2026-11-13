@@ -1,46 +1,76 @@
-import { FilesetResolver, HandLandmarker, PoseLandmarker } from '@mediapipe/tasks-vision';
-import { associateHands, type MotionFrame } from './motion.ts';
+import type { MotionFrame } from './motion.ts';
+import type { WorkerRequest, WorkerResponse } from './tracking/protocol.ts';
 
 export class MotionTracker {
-  private constructor(private pose: PoseLandmarker, private hands: HandLandmarker) {}
+  private worker: Worker;
+  private busy = false;
+  private disposed = false;
+  private frameTimeout?: ReturnType<typeof setTimeout>;
+  private rejectInitialization?: (error: Error) => void;
 
-  static async create(): Promise<MotionTracker> {
-    const base = import.meta.env.BASE_URL;
-    const vision = await FilesetResolver.forVisionTasks(`${base}wasm`);
-    let pose: PoseLandmarker | undefined;
-    try {
-      // CPU also works on machines with limited WebGL contexts. Rendering remains WebGL.
-      pose = await PoseLandmarker.createFromOptions(vision, {
-        baseOptions: { modelAssetPath: `${base}models/pose_landmarker_full.task`, delegate: 'CPU' },
-        runningMode: 'VIDEO', numPoses: 1,
-        minPoseDetectionConfidence: 0.5, minPosePresenceConfidence: 0.5,
-        minTrackingConfidence: 0.5, outputSegmentationMasks: false,
-      });
-      const hands = await HandLandmarker.createFromOptions(vision, {
-        baseOptions: { modelAssetPath: `${base}models/hand_landmarker.task`, delegate: 'CPU' },
-        runningMode: 'VIDEO', numHands: 2,
-        minHandDetectionConfidence: 0.5, minHandPresenceConfidence: 0.5,
-        minTrackingConfidence: 0.5,
-      });
-      return new MotionTracker(pose, hands);
-    } catch (error) {
-      pose?.close();
-      throw error;
+  private constructor(worker: Worker) { this.worker = worker; }
+
+  static async create(onResult: (motion: MotionFrame) => void, onError: (error: Error) => void, signal: AbortSignal): Promise<MotionTracker> {
+    if (!globalThis.Worker || !globalThis.OffscreenCanvas || !globalThis.createImageBitmap) {
+      throw new Error('Holistic tracking requires a browser with Web Workers, OffscreenCanvas, and ImageBitmap support. Use a recent Chrome or Edge.');
     }
+    const worker = new Worker(new URL('./tracking/holistic.worker', import.meta.url), { name: 'holistic-inference' });
+    const tracker = new MotionTracker(worker);
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => tracker.rejectInitialization?.(new Error('Holistic initialization timed out. Check the local assets.')), 60_000);
+        const finish = () => { clearTimeout(timeout); tracker.rejectInitialization = undefined; };
+        tracker.rejectInitialization = error => { finish(); reject(error); };
+        const fail = (error: Error) => {
+          if (tracker.disposed) return;
+          if (tracker.rejectInitialization) tracker.rejectInitialization(error);
+          else onError(error);
+        };
+        worker.onmessage = ({ data }: MessageEvent<WorkerResponse>) => {
+          if (tracker.disposed) return;
+          if (data.type === 'ready') { finish(); resolve(); }
+          else if (data.type === 'error') fail(new Error(data.message));
+          else {
+            clearTimeout(tracker.frameTimeout);
+            tracker.busy = false;
+            onResult(data.motion);
+          }
+        };
+        worker.onerror = event => { event.preventDefault(); fail(new Error(event.message || 'The Holistic worker failed.')); };
+        signal.addEventListener('abort', () => tracker.close(), { once: true });
+        if (signal.aborted) { tracker.close(); return; }
+        worker.postMessage({ type: 'initialize', assetBase: new URL('holistic/', document.baseURI).href } satisfies WorkerRequest);
+      });
+      tracker.reportError = onError;
+      return tracker;
+    } catch (error) { tracker.close(); throw error; }
   }
 
-  process(video: HTMLVideoElement, timestamp: number): MotionFrame {
-    const pose = this.pose.detectForVideo(video, timestamp);
-    const hands = this.hands.detectForVideo(video, timestamp);
-    const image = pose.landmarks[0] ?? [];
-    return {
-      timestamp, pose: image, world: pose.worldLandmarks[0] ?? [],
-      hands: associateHands(image, hands.landmarks, hands.worldLandmarks),
-    };
+  private reportError: (error: Error) => void = () => {};
+
+  /** Skip frames while busy. Never queue video frames behind a slow inference. */
+  submit(video: HTMLVideoElement, timestamp: number): void {
+    if (this.busy || this.disposed) return;
+    this.busy = true;
+    void createImageBitmap(video).then(image => {
+      if (this.disposed) { image.close(); return; }
+      try {
+        this.worker.postMessage({ type: 'frame', image, timestamp } satisfies WorkerRequest, [image]);
+        this.frameTimeout = setTimeout(() => {
+          if (!this.disposed) this.reportError(new Error('Holistic stopped responding. Restart the camera.'));
+        }, 30_000);
+      } catch (error) { image.close(); throw error; }
+    }).catch(error => {
+      this.busy = false;
+      if (!this.disposed) this.reportError(error instanceof Error ? error : new Error(String(error)));
+    });
   }
 
   close(): void {
-    this.pose.close();
-    this.hands.close();
+    if (this.disposed) return;
+    this.rejectInitialization?.(new Error('Tracking startup was cancelled.'));
+    this.disposed = true;
+    clearTimeout(this.frameTimeout);
+    this.worker.terminate();
   }
 }

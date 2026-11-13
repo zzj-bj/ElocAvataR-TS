@@ -3,26 +3,34 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=24" },
+  "engines": { "node": "^24.15.0 || >=26.0.0" },
   "scripts": {
-    "dev": "vite --host 127.0.0.1",
-    "build": "tsc --noEmit && vite build",
-    "preview": "vite preview --host 127.0.0.1",
-    "typecheck": "tsc --noEmit",
+    "dev": "ng serve",
+    "build": "ng build",
+    "preview": "node scripts/preview.ts",
+    "typecheck": "ngc -p tsconfig.app.json --noEmit && tsc --noEmit",
     "setup-assets": "node scripts/setup-assets.ts",
     "test": "node --test tests/*.test.ts",
     "test:browser": "playwright test"
   },
   "dependencies": {
-    "@mediapipe/tasks-vision": "0.10.32",
+    "@angular/common": "22.2.6",
+    "@angular/compiler": "22.2.6",
+    "@angular/core": "22.2.6",
+    "@angular/platform-browser": "22.2.6",
+    "@mediapipe/holistic": "0.5.1675471629",
     "@pixiv/three-vrm": "3.5.5",
-    "three": "0.187.0"
+    "three": "0.187.0",
+    "rxjs": "^7.8.2",
+    "tslib": "^2.8.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0",
+    "@angular/build": "22.2.7",
+    "@angular/cli": "22.2.7",
+    "@angular/compiler-cli": "22.2.6",
     "@types/node": "^24.0.0",
     "@types/three": "^0.183.0",
-    "typescript": "5.9.3",
-    "vite": "7.3.1"
+    "typescript": "~6.0.0"
   }
 }

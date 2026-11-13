@@ -2,9 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Bone, Object3D, Quaternion, Vector3 } from 'three';
 import { type VRM, type VRMHumanBoneName } from '@pixiv/three-vrm';
-import { associateHands, emptyMotion, valid, type Landmark } from '../src/motion.ts';
+import { emptyMotion, valid, type Landmark } from '../src/motion.ts';
+import { extractHolistic } from '../src/tracking/holistic-result.ts';
 import { AvatarRig, basis, toAvatar } from '../src/rig.ts';
 import { demoMotion } from '../src/demo.ts';
+import { solveFace } from '../src/face.ts';
 
 const handAt = (x: number, y: number): Landmark[] => Array.from({ length: 21 }, () => ({ x, y, z: 0 }));
 const poseAt = (): Landmark[] => {
@@ -14,26 +16,30 @@ const poseAt = (): Landmark[] => {
   return points;
 };
 
-test('hands follow anatomical pose wrists regardless of detector output ordering', () => {
+test('Holistic anatomical sides are preserved and hand coordinates are wrist-relative with aspect correction', () => {
   const left = handAt(0.8, 0.5), right = handAt(0.2, 0.5);
-  for (const images of [[right, left], [left, right]]) {
-    const result = associateHands(poseAt(), images, images);
-    assert.equal(result.left?.image, left);
-    assert.equal(result.right?.image, right);
-  }
+  left[5] = { x: 0.9, y: 0.7, z: -0.1 };
+  const result = extractHolistic({ poseLandmarks: poseAt(), leftHandLandmarks: left, rightHandLandmarks: right }, 123, 2);
+  assert.equal(result.timestamp, 123);
+  assert.deepEqual(result.hands.left?.image, left);
+  assert.deepEqual(result.hands.right?.image, right);
+  assert.deepEqual(result.hands.left?.local[0], { x: 0, y: 0, z: 0 });
+  assert.ok(Math.abs(result.hands.left!.local[5].y - 0.1) < 1e-8);
+  assert.equal(result.hands.left!.local[5].z, -0.1);
+  assert.notEqual(result.hands.left!.image[0], left[0], 'result data must be copied');
 });
 
-test('hand matching is one-to-one, maximizes count, and rejects distant/invalid points', () => {
-  const pose = poseAt();
-  pose[15].x = 0.5; pose[16].x = 0.65;
-  const a = handAt(0.52, 0.5), b = handAt(0.3, 0.5);
-  const result = associateHands(pose, [a, b], [a, b]);
-  assert.equal(result.left?.image, b);
-  assert.equal(result.right?.image, a);
-  assert.deepEqual(associateHands(poseAt(), [handAt(4, 4)], [a]), {});
-  a[5].x = NaN;
-  assert.deepEqual(associateHands(poseAt(), [a], [a]), {});
-  assert.deepEqual(associateHands([], [b], [b]), {});
+test('Holistic results include body world and face points, support the pinned legacy key, and reject invalid data', () => {
+  const face = Array.from({ length: 478 }, () => ({ x: 0.5, y: 0.5, z: 0 }));
+  const world = poseAt(), hand = handAt(0.2, 0.5);
+  const result = extractHolistic({ za: world, faceLandmarks: face, leftHandLandmarks: hand }, 3, 1);
+  assert.deepEqual(result.world, world);
+  assert.equal(result.face.length, 478);
+  assert.equal(result.hands.left!.local.length, 21);
+  hand[5].x = NaN;
+  assert.deepEqual(extractHolistic({ leftHandLandmarks: hand }, 4, 1).hands, {});
+  assert.deepEqual(extractHolistic({}, 4, 1), emptyMotion(4));
+  assert.deepEqual(extractHolistic({ rightHandLandmarks: handAt(0, 0) }, 4, 0).hands, {});
 });
 
 test('coordinate transform retains depth and rejects degenerate body frames', () => {
@@ -44,6 +50,24 @@ test('coordinate transform retains depth and rejects degenerate body frames', ()
   assert.equal(basis(new Vector3(1, 0, 0), new Vector3(1, 0, 0)), undefined);
   const frame = basis(new Vector3(1, 0, 0), new Vector3(0, 1, 0))!;
   assert.ok(frame.angleTo(new Quaternion()) < 1e-8);
+});
+
+test('face landmarks drive independent blinks and mouth opening and reset on lost/invalid faces', () => {
+  const points = Array.from({ length: 478 }, () => ({ x: 0, y: 0, z: 0 }));
+  points[362].x = 0.6; points[263].x = 0.8;
+  points[33].x = 0.2; points[133].x = 0.4;
+  points[386] = { x: 0.7, y: 0.4, z: 0 }; points[374] = { x: 0.7, y: 0.4, z: 0 };
+  points[159] = { x: 0.3, y: 0.35, z: 0 }; points[145] = { x: 0.3, y: 0.45, z: 0 };
+  points[61].x = 0.4; points[291].x = 0.6;
+  points[13].y = 0.6; points[14].y = 0.8;
+  const result = solveFace(points, 2);
+  assert.equal(result.blinkLeft, 1);
+  assert.ok(result.blinkRight < 0.1);
+  assert.equal(result.aa, 1);
+  const closed = solveFace([], 1);
+  assert.deepEqual(closed, { blinkLeft: 0, blinkRight: 0, aa: 0 });
+  points[386].x = NaN;
+  assert.equal(solveFace(points, 2).blinkLeft, 0);
 });
 
 function fakeAvatar(): { vrm: VRM; bones: Map<string, Bone> } {
@@ -94,7 +118,7 @@ test('VRM rig moves real hierarchical bones, independently animates fingers, and
   assert.ok(index.angleTo(little) > 0.01, 'different fingers must not share one curl');
   for (const bone of bones.values()) assert.ok(bone.quaternion.toArray().every(Number.isFinite));
   const broken = demoMotion(0.5);
-  broken.hands.left!.world[5].x = NaN;
+  broken.hands.left!.local[5].x = NaN;
   rig.apply(broken, 1 / 30, 0, 0.5);
   assert.ok(bones.get('leftIndexIntermediate')!.quaternion.angleTo(new Quaternion()) < 1e-8);
   rig.apply(emptyMotion(), 1, 0, 0.5);

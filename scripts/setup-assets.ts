@@ -5,8 +5,6 @@ import path from 'node:path';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const assets = [
-  { file: 'models/pose_landmarker_full.task', url: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task' },
-  { file: 'models/hand_landmarker.task', url: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task' },
   { file: 'avatar/sample.vrm', url: 'https://raw.githubusercontent.com/pixiv/three-vrm/v3.5.5/packages/three-vrm/examples/models/VRM1_Constraint_Twist_Sample.vrm' },
 ];
 
@@ -31,18 +29,28 @@ for (const asset of assets) {
       if (!meta) throw new Error('Sample VRM metadata missing');
       console.log('Official sample attribution:', JSON.stringify(meta));
       await writeFile(path.join(root, 'public/avatar/sample-meta.json'), JSON.stringify(meta, null, 2) + '\n');
-    } else if (bytes.byteLength < 100_000 || !Buffer.from(bytes.subarray(0, 16)).includes(Buffer.from('PK'))) {
-      throw new Error('Invalid MediaPipe task bundle');
     }
     await writeFile(target, bytes);
   }
   console.log(`${asset.file}: ${bytes.byteLength} bytes, SHA256 ${createHash('sha256').update(bytes).digest('hex')}`);
 }
 
-const wasmSource = path.join(root, 'node_modules/@mediapipe/tasks-vision/wasm');
-const wasmTarget = path.join(root, 'public/wasm');
-await mkdir(wasmTarget, { recursive: true });
-for (const name of await readdir(wasmSource)) {
-  if (name.endsWith('.js') || name.endsWith('.wasm')) await copyFile(path.join(wasmSource, name), path.join(wasmTarget, name));
+const holisticSource = path.join(root, 'node_modules/@mediapipe/holistic');
+const holisticTarget = path.join(root, 'public/holistic');
+await mkdir(holisticTarget, { recursive: true });
+for (const name of await readdir(holisticSource)) {
+  if (/\.(js|wasm|data|binarypb)$/.test(name) || name === 'pose_landmark_full.tflite') {
+    if (name === 'holistic.js') {
+      const source = await readFile(path.join(holisticSource, name), 'utf8');
+      const marker = 'a.i.GL.makeContextCurrent(f);';
+      const contextOption = 'ua:"undefined"!==typeof WebGL2RenderingContext?2:1';
+      if (source.split(marker).length !== 2) throw new Error('Pinned Holistic worker compatibility patch no longer matches. Review the runtime before upgrading.');
+      if (source.split(contextOption).length !== 2) throw new Error('Pinned Holistic WebGL option patch no longer matches.');
+      // Legacy 0.5 initializes K (the texture-upload WebGL context) only on its DOM path.
+      // Initialize the same field on its existing OffscreenCanvas worker path as well.
+      // The same worker path mangles Emscripten's public `majorVersion` option to `ua`.
+      await writeFile(path.join(holisticTarget, name), source.replace(contextOption, 'majorVersion:2').replace(marker, `${marker}a.K=a.i.GL.currentContext.GLctx;`));
+    } else await copyFile(path.join(holisticSource, name), path.join(holisticTarget, name));
+  }
 }
-console.log('Ready. Runtime models and WASM are served locally; run npm run dev.');
+console.log('Ready. Holistic scripts, packed models, graph, and WASM are served locally. No .task files or runtime CDN are used.');

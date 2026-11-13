@@ -1,6 +1,8 @@
 node_modules/
 dist/
 .vite/
+.angular/
+out-tsc/
 *.local
 *.log
 .env
@@ -8,5 +10,6 @@ dist/
 !.env.example
 public/models/*.task
 public/wasm/
+public/holistic/
 public/avatar/*.vrm
 artifacts/

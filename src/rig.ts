@@ -121,8 +121,8 @@ export class AvatarRig {
         if (start && end) this.direction(bone, child, end.sub(start));
       }
       const hand = motion.hands[side];
-      if (!hand || !p(15 + offset) || hand.world.length !== 21 || !hand.world.every(v => valid(v))) continue;
-      const h = hand.world.map(toAvatar);
+      if (!hand || !p(15 + offset) || hand.local.length !== 21 || !hand.local.every(v => valid(v))) continue;
+      const h = hand.local.map(toAvatar);
       const palm = basis(h[5].clone().sub(h[17]), h[9].clone().sub(h[0]));
       const restPalm = this.palmBases[side];
       if (palm && restPalm) this.worldRotation(`${side}Hand`, palm.multiply(restPalm.clone().invert()));
