@@ -33,7 +33,7 @@ test('loads a real VRM, renders motion, imports models, and runs local inference
     if (/^https?:/.test(request.url()) && !request.url().startsWith('http://127.0.0.1:5174')) external.push(request.url());
   });
   await page.goto('/');
-  await expect(page.locator('app-root')).toHaveAttribute('ng-version', /^22\./);
+  await expect(page.locator('app-root')).toHaveAttribute('ng-version', /^15\./);
   await expect(page.locator('#notice')).toContainText('Ready.', { timeout: 30_000 });
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   expect(await page.locator('body').innerText()).not.toMatch(/\p{Script=Han}/u);

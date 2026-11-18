@@ -1,5 +1,5 @@
-import type { MotionFrame } from './motion.ts';
-import type { WorkerRequest, WorkerResponse } from './tracking/protocol.ts';
+import type { MotionFrame } from './motion';
+import type { WorkerRequest, WorkerResponse } from './tracking/protocol';
 
 export class MotionTracker {
   private worker: Worker;

@@ -1,6 +1,6 @@
 import { Matrix4, Quaternion, Vector3, type Object3D } from 'three';
 import { VRMHumanBoneName, type VRM } from '@pixiv/three-vrm';
-import { valid, type Landmark, type MotionFrame, type Side } from './motion.ts';
+import { valid, type Landmark, type MotionFrame, type Side } from './motion';
 
 type BoneName = (typeof VRMHumanBoneName)[keyof typeof VRMHumanBoneName];
 interface RestBone {

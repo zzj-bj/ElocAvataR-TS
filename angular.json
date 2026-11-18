@@ -9,13 +9,14 @@
       "sourceRoot": "src",
       "architect": {
         "build": {
-          "builder": "@angular/build:application",
+          "builder": "@angular-devkit/build-angular:browser",
           "options": {
-            "browser": "src/main.ts",
+            "main": "src/main.ts",
+            "polyfills": ["zone.js"],
             "index": "index.html",
             "tsConfig": "tsconfig.app.json",
             "webWorkerTsConfig": "tsconfig.worker.json",
-            "outputPath": "dist/angular",
+            "outputPath": "dist/angular/browser",
             "deleteOutputPath": false,
             "assets": [
               { "glob": "**/*", "input": "public/avatar", "output": "avatar" },
@@ -30,11 +31,11 @@
           "defaultConfiguration": "production"
         },
         "serve": {
-          "builder": "@angular/build:dev-server",
+          "builder": "@angular-devkit/build-angular:dev-server",
           "options": { "host": "127.0.0.1", "port": 5173 },
           "configurations": {
-            "development": { "buildTarget": "elocavatar:build:development" },
-            "production": { "buildTarget": "elocavatar:build:production" }
+            "development": { "browserTarget": "elocavatar:build:development" },
+            "production": { "browserTarget": "elocavatar:build:production" }
           },
           "defaultConfiguration": "development"
         }

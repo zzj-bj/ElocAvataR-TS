@@ -1,4 +1,4 @@
-import type { MotionFrame } from '../motion.ts';
+import type { MotionFrame } from '../motion';
 
 export type WorkerRequest =
   | { type: 'initialize'; assetBase: string }

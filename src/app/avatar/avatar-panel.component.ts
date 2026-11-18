@@ -1,17 +1,18 @@
-import { AfterViewInit, Component, ElementRef, OnDestroy, inject, input, signal, viewChild } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, Input, NgZone, OnDestroy, ViewChild, inject } from '@angular/core';
 import { AvatarStage } from '../../avatar';
 import { CaptureService, describeError } from '../services/capture.service';
 
 @Component({ selector: 'app-avatar-panel', standalone: true, templateUrl: './avatar-panel.component.html' })
 export class AvatarPanelComponent implements AfterViewInit, OnDestroy {
   readonly capture = inject(CaptureService);
-  readonly mirror = input(true);
-  readonly smoothing = input(0.1);
-  readonly visibility = input(0.5);
-  readonly ready = signal(false);
-  readonly modelName = signal('Loading sample avatar…');
-  readonly focus = signal<'body' | 'left' | 'right'>('body');
-  private host = viewChild.required<ElementRef<HTMLDivElement>>('avatarView');
+  @Input() mirror = true;
+  @Input() smoothing = 0.1;
+  @Input() visibility = 0.5;
+  ready = false;
+  modelName = 'Loading sample avatar…';
+  focus: 'body' | 'left' | 'right' = 'body';
+  @ViewChild('avatarView', { static: true }) private host!: ElementRef<HTMLDivElement>;
+  private readonly zone = inject(NgZone);
   private stage?: AvatarStage;
   private raf = 0;
   private previous = performance.now();
@@ -19,16 +20,16 @@ export class AvatarPanelComponent implements AfterViewInit, OnDestroy {
 
   ngAfterViewInit(): void {
     try {
-      this.stage = new AvatarStage(this.host().nativeElement);
-      this.raf = requestAnimationFrame(this.render);
+      this.stage = this.zone.runOutsideAngular(() => new AvatarStage(this.host.nativeElement));
+      this.raf = this.zone.runOutsideAngular(() => requestAnimationFrame(this.render));
       void this.stage.load(new URL('avatar/sample.vrm', document.baseURI).href).then(loaded => {
         if (!loaded || this.disposed) return;
-        this.ready.set(true);
-        this.modelName.set('pixiv · VRM Twist Sample');
-        if (!this.capture.running() && !this.capture.starting()) this.capture.setNotice('Ready. Start the camera or try the motion demo. Holistic tracks body, hands, and face together. Sample avatar © pixiv Inc.');
+        this.ready = true;
+        this.modelName = 'pixiv · VRM Twist Sample';
+        if (!this.capture.running && !this.capture.starting) this.capture.setNotice('Ready. Start the camera or try the motion demo. Holistic tracks body, hands, and face together. Sample avatar © pixiv Inc.');
       }).catch(error => {
         if (this.disposed) return;
-        this.modelName.set('Import a VRM model');
+        this.modelName = 'Import a VRM model';
         this.capture.setNotice(`Sample model unavailable: ${describeError(error)} Run npm run setup-assets or import your own .vrm file.`, true);
       });
     } catch (error) { this.capture.setNotice(`Unable to create the 3D view: ${describeError(error)} Enable WebGL in your browser.`, true); }
@@ -38,12 +39,12 @@ export class AvatarPanelComponent implements AfterViewInit, OnDestroy {
     if (this.disposed) return;
     const dt = Math.min(Math.max((now - this.previous) / 1000, 0.001), 0.1);
     this.previous = now;
-    this.stage?.render(this.capture.currentMotion(now), dt, this.smoothing(), this.visibility());
+    this.stage?.render(this.capture.currentMotion(now), dt, this.smoothing, this.visibility);
     this.raf = requestAnimationFrame(this.render);
   };
 
-  setFocus(focus: 'body' | 'left' | 'right'): void { this.focus.set(focus); this.stage?.setFocus(focus); }
-  reset(): void { this.focus.set('body'); this.stage?.resetView(); }
+  setFocus(focus: 'body' | 'left' | 'right'): void { this.focus = focus; this.stage?.setFocus(focus); }
+  reset(): void { this.focus = 'body'; this.stage?.resetView(); }
 
   async importModel(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
@@ -55,9 +56,9 @@ export class AvatarPanelComponent implements AfterViewInit, OnDestroy {
     this.capture.setNotice('Loading the VRM model…');
     try {
       if (await this.stage.load(url) && !this.disposed) {
-        this.modelName.set(/\p{Script=Han}/u.test(file.name) ? 'Imported VRM' : file.name);
-        this.focus.set('body');
-        this.ready.set(true);
+        this.modelName = /\p{Script=Han}/u.test(file.name) ? 'Imported VRM' : file.name;
+        this.focus = 'body';
+        this.ready = true;
         this.capture.setNotice('VRM loaded. Start the camera or try the motion demo.');
       }
     } catch (error) { if (!this.disposed) this.capture.setNotice(`Model loading failed: ${describeError(error)}`, true); }

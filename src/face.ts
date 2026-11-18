@@ -1,4 +1,4 @@
-import { valid, type Landmark } from './motion.ts';
+import { valid, type Landmark } from './motion';
 
 export interface FaceExpressions { blinkLeft: number; blinkRight: number; aa: number }
 

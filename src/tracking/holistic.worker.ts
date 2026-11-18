@@ -1,7 +1,7 @@
 import type { Holistic, InputMap } from '@mediapipe/holistic';
-import { extractHolistic, type HolisticResult } from './holistic-result.ts';
-import { emptyMotion, type MotionFrame } from '../motion.ts';
-import type { WorkerRequest, WorkerResponse } from './protocol.ts';
+import { extractHolistic, type HolisticResult } from './holistic-result';
+import { emptyMotion, type MotionFrame } from '../motion';
+import type { WorkerRequest, WorkerResponse } from './protocol';
 
 const scope = self as unknown as DedicatedWorkerGlobalScope & {
   Holistic: typeof Holistic;
@@ -17,7 +17,7 @@ const post = (message: WorkerResponse) => scope.postMessage(message);
 scope.onmessage = async ({ data }: MessageEvent<WorkerRequest>) => {
   try {
     if (data.type === 'initialize') {
-      const probe = new OffscreenCanvas(1, 1).getContext('webgl2');
+      const probe = new OffscreenCanvas(1, 1).getContext('webgl2') as WebGL2RenderingContext | null;
       if (!probe) throw new Error('Holistic background inference requires OffscreenCanvas with WebGL 2. Enable hardware acceleration or update your browser.');
       probe.getExtension('WEBGL_lose_context')?.loseContext();
       // The legacy worker loader otherwise resolves packed data/WASM beside the worker URL.

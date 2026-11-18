@@ -2,11 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Bone, Object3D, Quaternion, Vector3 } from 'three';
 import { type VRM, type VRMHumanBoneName } from '@pixiv/three-vrm';
-import { emptyMotion, valid, type Landmark } from '../src/motion.ts';
-import { extractHolistic } from '../src/tracking/holistic-result.ts';
-import { AvatarRig, basis, toAvatar } from '../src/rig.ts';
-import { demoMotion } from '../src/demo.ts';
-import { solveFace } from '../src/face.ts';
+import { emptyMotion, valid, type Landmark } from '../src/motion';
+import { extractHolistic } from '../src/tracking/holistic-result';
+import { AvatarRig, basis, toAvatar } from '../src/rig';
+import { demoMotion } from '../src/demo';
+import { solveFace } from '../src/face';
 
 const handAt = (x: number, y: number): Landmark[] => Array.from({ length: 21 }, () => ({ x, y, z: 0 }));
 const poseAt = (): Landmark[] => {

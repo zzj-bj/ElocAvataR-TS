@@ -1,4 +1,4 @@
-import { Component, HostListener, OnDestroy, inject, signal, viewChild } from '@angular/core';
+import { Component, HostListener, OnDestroy, ViewChild, inject } from '@angular/core';
 import { CameraPanelComponent } from './camera/camera-panel.component';
 import { AvatarPanelComponent } from './avatar/avatar-panel.component';
 import { CaptureService } from './services/capture.service';
@@ -9,11 +9,11 @@ import { CaptureService } from './services/capture.service';
 })
 export class AppComponent implements OnDestroy {
   readonly capture = inject(CaptureService);
-  readonly mirror = signal(true);
-  readonly landmarks = signal(true);
-  readonly smoothing = signal(0.1);
-  readonly visibility = signal(0.5);
-  readonly avatar = viewChild(AvatarPanelComponent);
+  mirror = true;
+  landmarks = true;
+  smoothing = 0.1;
+  visibility = 0.5;
+  @ViewChild(AvatarPanelComponent) avatar?: AvatarPanelComponent;
   private readonly devicesChanged = () => void this.capture.updateDevices().catch(() => {});
 
   constructor() {
@@ -24,12 +24,12 @@ export class AppComponent implements OnDestroy {
   @HostListener('window:keydown', ['$event'])
   onKey(event: KeyboardEvent): void {
     if ((event.target as HTMLElement)?.matches('input,select,textarea')) return;
-    if (event.key.toLowerCase() === 'r') this.avatar()?.reset();
-    if (event.key === 'Escape') { this.capture.demonstrating.set(false); this.capture.stop(); }
+    if (event.key.toLowerCase() === 'r') this.avatar?.reset();
+    if (event.key === 'Escape') { this.capture.demonstrating = false; this.capture.stop(); }
   }
 
   @HostListener('window:pagehide')
-  stop(): void { this.capture.demonstrating.set(false); this.capture.stop(false); }
+  stop(): void { this.capture.demonstrating = false; this.capture.stop(false); }
 
   ngOnDestroy(): void {
     this.stop();

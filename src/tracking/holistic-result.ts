@@ -1,4 +1,4 @@
-import { emptyMotion, valid, type Landmark, type MotionFrame } from '../motion.ts';
+import { emptyMotion, valid, type Landmark, type MotionFrame } from '../motion';
 
 export interface HolisticResult {
   poseLandmarks?: Landmark[];

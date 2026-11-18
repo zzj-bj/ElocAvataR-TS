@@ -4,11 +4,13 @@ An Angular and TypeScript application that brings a VRM avatar to life with loca
 
 ## Requirements
 
-- Node.js **24.15 or later in the 24.x line**, or Node.js 26 or later, and npm.
+- Node.js **18.20.x** and npm for the Angular 15 build/dev server. The existing Playwright 1.65 browser tests require a separate Node.js **24.15+** environment.
 - A recent Chrome or Edge with Web Workers, OffscreenCanvas, WebGL 2, WebAssembly, and camera access enabled.
 - A webcam for live tracking. The synthetic motion demo works without one.
 
-This branch uses Angular 22, TypeScript 6.0, and the explicitly requested legacy package `@mediapipe/holistic` pinned to `0.5.1675471629`.
+This branch uses Angular 15.2, TypeScript 4.9.5, and the explicitly requested legacy package `@mediapipe/holistic` pinned to `0.5.1675471629`.
+
+Three.js and three-vrm runtime versions are unchanged. `@types/three` is pinned to `0.182.0` and `@types/node` to `18.16.20` for TypeScript 4.9 compatibility; newer declarations can require syntax the Angular 15 compiler cannot parse.
 
 ## Quick start
 
@@ -60,7 +62,7 @@ src/
       avatar-panel.component.ts        VRM loading, views, independent render loop
       avatar-panel.component.html      Avatar canvas, model import, view controls
     services/
-      capture.service.ts               Camera lifecycle, signals, async capture scheduling
+      capture.service.ts               Camera lifecycle, state, async capture scheduling
   tracking/
     holistic.worker.ts                 Unified Holistic inference in a classic Web Worker
     holistic-result.ts                 Numeric results and coordinate adaptation
@@ -76,7 +78,7 @@ src/
 angular.json                           Angular CLI development and production configuration
 ```
 
-The application uses standalone Angular components, signals, external templates, strict template checking, and Angular's default zoneless change detection. Angular CLI builds the application and worker; no separate Vite configuration is needed.
+The application uses Angular 15 standalone components, decorator-based inputs and view queries, external templates, strict template checking, and Zone.js change detection. Capture and rendering loops run outside the Angular zone; tracking results re-enter it to update the UI. Angular CLI builds the application and worker; no separate Vite configuration is needed.
 
 ## Unified and asynchronous tracking
 
@@ -142,11 +144,12 @@ Angular outputs the application, worker, and local runtime assets to `dist/angul
 ```sh
 npm test
 npm run typecheck
-npm run test:browser
 npm run build
 ```
 
 Unit tests cover unified-result extraction, anatomical sides, the legacy world-coordinate key, aspect-correct hand coordinates, invalid/missing data, depth conversion, hierarchical body/finger rotations, independent expressions, tracking-loss reset, and time-based smoothing.
+
+To keep Playwright 1.65 unchanged, start `npm run dev -- --port 5174` in a Node 18 terminal, then run `npm run test:browser` in a separate Node 24.15+ terminal. The tests reuse the running server outside CI. In CI, start the Node 18 server separately and use an equivalent Playwright server configuration. The CLI is not officially supported on Node 24. Scripts and unit tests use `tsx` because Node 18 does not execute TypeScript files directly.
 
 Browser tests use installed Chrome with a synthetic camera on port 5174. They check Angular bootstrap and English templates, a real VRM, model imports, local Holistic/WASM inference, one-frame backpressure, worker termination, camera cancellation and permissions, interactive controls, and narrow-screen layout. Screenshots are written to `artifacts`.
 

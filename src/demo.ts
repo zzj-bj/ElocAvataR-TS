@@ -1,4 +1,4 @@
-import { type Landmark, type MotionFrame } from './motion.ts';
+import { type Landmark, type MotionFrame } from './motion';
 
 /** Deterministic synthetic landmarks, explicitly separate from real camera tracking. */
 export function demoMotion(time: number): MotionFrame {

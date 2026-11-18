@@ -1,7 +1,7 @@
-import { Injectable, computed, signal } from '@angular/core';
-import { emptyMotion, type MotionFrame } from '../../motion.ts';
-import { demoMotion } from '../../demo.ts';
-import { MotionTracker } from '../../tracker.ts';
+import { Injectable, NgZone, inject } from '@angular/core';
+import { emptyMotion, type MotionFrame } from '../../motion';
+import { demoMotion } from '../../demo';
+import { MotionTracker } from '../../tracker';
 
 export function describeError(error: unknown): string {
   const messages: Record<string, string> = {
@@ -18,19 +18,20 @@ export function describeError(error: unknown): string {
 
 @Injectable({ providedIn: 'root' })
 export class CaptureService {
-  readonly running = signal(false);
-  readonly starting = signal(false);
-  readonly demonstrating = signal(false);
-  readonly frame = signal(emptyMotion());
-  readonly fps = signal(0);
-  readonly notice = signal('Loading the local VRM sample…');
-  readonly noticeError = signal(false);
-  readonly devices = signal<{ id: string; label: string }[]>([]);
-  readonly mode = computed(() => this.demonstrating() ? 'Synthetic demo' : this.running() ? 'Live capture' : 'Idle');
-  readonly bodyTracked = computed(() => this.demonstrating() || this.frame().world.length > 0);
-  readonly leftTracked = computed(() => this.demonstrating() || !!this.frame().hands.left);
-  readonly rightTracked = computed(() => this.demonstrating() || !!this.frame().hands.right);
-  readonly faceTracked = computed(() => this.frame().face.length > 0);
+  running = false;
+  starting = false;
+  demonstrating = false;
+  frame = emptyMotion();
+  fps = 0;
+  notice = 'Loading the local VRM sample…';
+  noticeError = false;
+  devices: { id: string; label: string }[] = [];
+  get mode(): string { return this.demonstrating ? 'Synthetic demo' : this.running ? 'Live capture' : 'Idle'; }
+  get bodyTracked(): boolean { return this.demonstrating || this.frame.world.length > 0; }
+  get leftTracked(): boolean { return this.demonstrating || !!this.frame.hands.left; }
+  get rightTracked(): boolean { return this.demonstrating || !!this.frame.hands.right; }
+  get faceTracked(): boolean { return this.frame.face.length > 0; }
+  private readonly zone = inject(NgZone);
   private stream?: MediaStream;
   private video?: HTMLVideoElement;
   private tracker?: MotionTracker;
@@ -41,20 +42,20 @@ export class CaptureService {
   private lastVideoTime = -1;
   private lastSubmitted = 0;
 
-  setNotice(message: string, error = false): void { this.notice.set(message); this.noticeError.set(error); }
+  setNotice(message: string, error = false): void { this.notice = message; this.noticeError = error; }
 
   async updateDevices(): Promise<void> {
     if (!navigator.mediaDevices?.enumerateDevices) return;
     const devices = await navigator.mediaDevices.enumerateDevices();
-    this.devices.set(devices.filter(d => d.kind === 'videoinput').map((d, i) => ({
+    this.devices = devices.filter(d => d.kind === 'videoinput').map((d, i) => ({
       id: d.deviceId, label: d.label && !/\p{Script=Han}/u.test(d.label) ? d.label : `Camera ${i + 1}`,
-    })));
+    }));
   }
 
   async start(video: HTMLVideoElement, deviceId: string): Promise<void> {
-    if (this.starting() || this.running()) return;
-    this.demonstrating.set(false);
-    this.starting.set(true);
+    if (this.starting || this.running) return;
+    this.demonstrating = false;
+    this.starting = true;
     this.video = video;
     const token = ++this.session;
     const abort = this.abort = new AbortController();
@@ -72,27 +73,27 @@ export class CaptureService {
       await video.play();
       if (token !== this.session) return;
       this.setNotice('Initializing local Holistic body, hand, and face models in a background worker…');
-      const tracker = await MotionTracker.create(motion => {
+      const tracker = await MotionTracker.create(motion => this.zone.run(() => {
         if (token !== this.session) return;
         const now = performance.now();
         const interval = now - this.lastResult;
-        this.fps.update(fps => this.lastResult ? (fps ? fps * 0.85 + 1000 / interval * 0.15 : 1000 / interval) : 0);
+        this.fps = this.lastResult ? (this.fps ? this.fps * 0.85 + 1000 / interval * 0.15 : 1000 / interval) : 0;
         this.lastResult = now;
-        this.frame.set(motion);
-      }, error => {
+        this.frame = motion;
+      }), error => this.zone.run(() => {
         if (token !== this.session) return;
         this.stop(false);
         this.setNotice(`Tracking failed: ${describeError(error)}`, true);
-      }, abort.signal);
+      }), abort.signal);
       if (token !== this.session) { tracker.close(); return; }
       this.tracker = tracker;
-      this.running.set(true);
-      this.starting.set(false);
+      this.running = true;
+      this.starting = false;
       pending.getVideoTracks().forEach(track => track.addEventListener('ended', () => {
         if (token === this.session) { this.stop(false); this.setNotice('The camera disconnected. Start it again to resume.', true); }
       }));
       this.setNotice('Live tracking is on. Holistic processes body, hands, and face together in a background worker.');
-      this.raf = requestAnimationFrame(this.captureFrame);
+      this.raf = this.zone.runOutsideAngular(() => requestAnimationFrame(this.captureFrame));
       await this.updateDevices().catch(() => {});
     } catch (error) {
       pending?.getTracks().forEach(t => t.stop());
@@ -103,7 +104,7 @@ export class CaptureService {
   }
 
   private captureFrame = (now: number): void => {
-    if (!this.running() || !this.video) return;
+    if (!this.running || !this.video) return;
     if (this.video.readyState >= 2 && this.video.currentTime !== this.lastVideoTime && now - this.lastSubmitted >= 33) {
       this.lastVideoTime = this.video.currentTime;
       this.lastSubmitted = now;
@@ -113,8 +114,8 @@ export class CaptureService {
   };
 
   currentMotion(now: number): MotionFrame {
-    if (this.demonstrating()) return demoMotion(now / 1000);
-    return this.running() && now - this.lastResult < 500 ? this.frame() : emptyMotion();
+    if (this.demonstrating) return demoMotion(now / 1000);
+    return this.running && now - this.lastResult < 500 ? this.frame : emptyMotion();
   }
 
   stop(notify = true): void {
@@ -127,10 +128,10 @@ export class CaptureService {
     this.stream?.getTracks().forEach(track => track.stop());
     this.stream = undefined;
     if (this.video) { this.video.pause(); this.video.srcObject = null; }
-    this.running.set(false);
-    this.starting.set(false);
-    this.frame.set(emptyMotion());
-    this.fps.set(0);
+    this.running = false;
+    this.starting = false;
+    this.frame = emptyMotion();
+    this.fps = 0;
     this.lastResult = 0;
     this.lastVideoTime = -1;
     this.lastSubmitted = 0;
@@ -138,9 +139,9 @@ export class CaptureService {
   }
 
   toggleDemo(): void {
-    const next = !this.demonstrating();
+    const next = !this.demonstrating;
     this.stop(false);
-    this.demonstrating.set(next);
+    this.demonstrating = next;
     this.setNotice(next ? 'Synthetic motion demo: preview body and individual finger joints. This does not measure real camera tracking accuracy.' : 'Demo stopped. You can now start the camera.');
   }
 }

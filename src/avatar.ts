@@ -2,12 +2,12 @@ import {
   AmbientLight, Box3, Color, DirectionalLight, GridHelper, HemisphereLight,
   PerspectiveCamera, Scene, Vector3, WebGLRenderer,
 } from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils, type VRM } from '@pixiv/three-vrm';
-import { AvatarRig } from './rig.ts';
-import { emptyMotion, type MotionFrame } from './motion.ts';
-import { solveFace } from './face.ts';
+import { AvatarRig } from './rig';
+import { emptyMotion, type MotionFrame } from './motion';
+import { solveFace } from './face';
 
 export class AvatarStage {
   readonly renderer = new WebGLRenderer({ antialias: true, alpha: false });
